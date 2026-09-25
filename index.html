@@ -1,0 +1,830 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CP Sthetik | Rendimiento mensual</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="config.js"></script>
+<style>
+:root{
+  --bg:#F2F1F6; --surface:#FFFFFF; --ink:#221A2A; --muted:#6E6577; --line:#E2DEE8;
+  --accent:#9C3D6B; --accent-soft:#F4E6EE;
+  --meta:#3657A6; --kommo:#177E6F;
+  --good:#2E7D4F; --warn:#A8701A; --bad:#B3363C; --info:#6E6577;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"Manrope", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#17131B; --surface:#211B26; --ink:#EEE9F2; --muted:#A79FB0; --line:#342C3B;
+    --accent:#D77AA6; --accent-soft:#3A2432;
+    --meta:#8AA4E6; --kommo:#4FC2AE;
+    --good:#6CC592; --warn:#E0A94D; --bad:#EE7A7F; --info:#A79FB0;
+    color-scheme: dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--body);-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--display);font-weight:700;margin:0;line-height:1.15;letter-spacing:-.01em}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.app{display:grid;grid-template-columns:232px 1fr;min-height:100%}
+aside{border-right:1px solid var(--line);padding:28px 18px;position:sticky;top:0;height:100vh;overflow:auto;display:flex;flex-direction:column;gap:22px}
+.brand{font-family:var(--display);font-size:22px;font-weight:700}
+.brand small{display:block;font-family:var(--body);font-size:13px;font-weight:500;color:var(--muted)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:9px 14px;cursor:pointer;font-weight:600}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn.danger{color:var(--bad)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+.rail{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.rail button{width:100%;text-align:left;background:none;border:0;border-left:3px solid transparent;padding:8px 10px;cursor:pointer;border-radius:0 6px 6px 0;display:flex;justify-content:space-between;align-items:center;gap:8px;text-transform:capitalize}
+.rail button:hover{background:var(--surface)}
+.rail button[aria-current="true"]{border-left-color:var(--accent);background:var(--surface);font-weight:700}
+.dots{display:flex;gap:4px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.dot.m{background:var(--meta)} .dot.k{background:var(--kommo)}
+.legend{font-size:12px;color:var(--muted);display:flex;gap:12px;align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+
+main{padding:36px clamp(18px,4vw,48px) 64px;max-width:1240px;width:100%}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:28px}
+.head h1{font-size:clamp(30px,4vw,44px);text-transform:capitalize}
+.head p{margin:6px 0 0;color:var(--muted)}
+
+section.block{margin-top:36px}
+.block-title{display:flex;align-items:baseline;gap:12px;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid var(--c,var(--line))}
+.block-title h2{font-size:22px}
+.block-title .note{color:var(--muted);font-size:13px}
+.block.meta{--c:var(--meta)} .block.kommo{--c:var(--kommo)} .block.cross{--c:var(--accent)}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.kpi{background:var(--surface);padding:14px 16px}
+.kpi .l{font-size:13px;color:var(--muted)}
+.kpi .v{font-family:var(--display);font-size:26px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi .d{font-size:12.5px;margin-top:2px;color:var(--muted)}
+.d .up-good,.d .down-good{color:var(--good);font-weight:700}
+.d .up-bad,.d .down-bad{color:var(--bad);font-weight:700}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px}
+.panel h3{font-size:16px;margin-bottom:10px}
+.chart-box{position:relative;height:260px}
+
+.analysis .summary{font-size:15.5px;margin:0 0 12px;max-width:72ch}
+.analysis ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.analysis li{display:grid;grid-template-columns:78px 1fr;gap:10px;align-items:baseline;max-width:80ch}
+.tag{font-size:11.5px;font-weight:700;border-radius:4px;padding:2px 6px;text-align:center;border:1px solid currentColor}
+.tag.good{color:var(--good)} .tag.warn{color:var(--warn)} .tag.bad{color:var(--bad)} .tag.info{color:var(--info)}
+.recs{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
+.recs h4{margin:0 0 6px;font-size:14px}
+.recs ol{margin:0;padding-left:20px;max-width:78ch}
+.recs li{margin-bottom:4px}
+
+.empty{padding:48px 24px;text-align:center;border:1px dashed var(--line);border-radius:10px;color:var(--muted)}
+.empty h2{color:var(--ink);font-size:24px;margin-bottom:8px}
+
+/* Upload */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:9px 18px;cursor:pointer;font-weight:600}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.form-row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-top:18px}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--muted);font-weight:600}
+label.f input,label.f select{padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--surface);min-width:200px;color:var(--ink);font-weight:500}
+.drop{margin-top:18px;border:2px dashed var(--line);border-radius:10px;padding:28px;text-align:center;cursor:pointer;background:var(--surface)}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop strong{display:block;font-size:16px}
+.drop span{color:var(--muted);font-size:13px}
+.map-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600;font-size:13px}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+.alert{padding:12px 14px;border-radius:8px;border:1px solid var(--warn);color:var(--warn);margin-top:14px;font-size:14px}
+.alert.err{border-color:var(--bad);color:var(--bad)}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:8px;font-weight:600;z-index:10;opacity:0;transition:opacity .2s}
+.toast.show{opacity:1}
+.muted{color:var(--muted)}
+.hidden{display:none!important}
+
+@media (max-width:860px){
+  .app{grid-template-columns:1fr}
+  aside{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:16px}
+  .rail{flex-direction:row;overflow-x:auto}
+  .rail button{border-left:0;border-bottom:3px solid transparent;border-radius:6px 6px 0 0;white-space:nowrap}
+  .rail button[aria-current="true"]{border-bottom-color:var(--accent)}
+  .grid2{grid-template-columns:1fr}
+  .analysis li{grid-template-columns:1fr}
+  .tag{justify-self:start}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand">CP Sthetik<small>Rendimiento mensual</small></div>
+    <button class="btn primary" id="btnUpload">Subir informe</button>
+    <div>
+      <div class="legend"><span><i class="dot m"></i>Meta</span><span><i class="dot k"></i>Kommo</span></div>
+      <ul class="rail" id="rail" style="margin-top:10px"></ul>
+    </div>
+  </aside>
+  <main id="main"></main>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* ============ Config ============ */
+const CFG = window.APP_CONFIG || {};
+const configured = CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && !CFG.SUPABASE_URL.includes("TU-PROYECTO");
+const db = configured ? window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY) : null;
+
+const S = { meta: [], kommo: [], selected: null, view: "dash", charts: [],
+  up: { platform: "meta", file: null, rows: null, meta: null, k: null } };
+
+/* ============ Utils ============ */
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const norm = s => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+const nf0 = new Intl.NumberFormat("es-EC", { maximumFractionDigits: 0 });
+const nf2 = new Intl.NumberFormat("es-EC", { maximumFractionDigits: 2 });
+const cur = new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD" });
+const int = v => v == null || isNaN(v) ? "–" : nf0.format(v);
+const dec = v => v == null || isNaN(v) ? "–" : nf2.format(v);
+const money = v => v == null || isNaN(v) ? "–" : cur.format(v);
+const pctf = v => v == null || isNaN(v) ? "–" : nf2.format(v) + "%";
+const signed = v => (v > 0 ? "+" : "") + nf2.format(v);
+const pct = (a, b) => (a == null || b == null || b === 0) ? null : (a - b) / Math.abs(b) * 100;
+const N = v => v == null || v === "" ? null : Number(v);
+const div = (a, b) => (a == null || !b) ? null : a / b;
+function monthName(p, short) {
+  if (!p) return "";
+  const [y, m] = p.split("-").map(Number);
+  return new Intl.DateTimeFormat("es-EC", { month: short ? "short" : "long", year: "numeric" }).format(new Date(y, m - 1, 1));
+}
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2600); }
+
+function parseNum(v) {
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return v;
+  let s = String(v).replace(/[^\d,.\-]/g, "");
+  if (!s || s === "-") return null;
+  const lc = s.lastIndexOf(","), ld = s.lastIndexOf(".");
+  if (lc > -1 && ld > -1) s = lc > ld ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+  else if (lc > -1) { const parts = s.split(","); s = (parts.length === 2 && parts[1].length !== 3) ? s.replace(",", ".") : s.replace(/,/g, ""); }
+  else if (ld > -1 && s.split(".").length > 2) s = s.replace(/\./g, "");
+  const n = parseFloat(s); return isNaN(n) ? null : n;
+}
+function parseDate(v) {
+  if (v == null || v === "") return null;
+  const pad = n => String(n).padStart(2, "0");
+  if (v instanceof Date && !isNaN(v)) return `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}`;
+  if (typeof v === "number" && v > 20000 && v < 80000) { const d = new Date(Math.round((v - 25569) * 864e5)); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`; }
+  const s = String(v).trim(); let m;
+  if ((m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/))) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+  if ((m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/))) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+  return null;
+}
+function coverage(m) {
+  if (!m.report_start || !m.report_end) return null;
+  const a = new Date(m.report_start + "T00:00:00"), b = new Date(m.report_end + "T00:00:00");
+  const days = Math.round((b - a) / 864e5) + 1;
+  const [y, mo] = m.period.split("-").map(Number);
+  return { days, dim: new Date(y, mo, 0).getDate() };
+}
+function findCol(headers, patterns) {
+  for (const re of patterns) { const h = headers.find(h => re.test(norm(h))); if (h) return h; }
+  return null;
+}
+
+async function readFile(file) {
+  const ext = file.name.split(".").pop().toLowerCase();
+  if (ext === "csv" || ext === "txt") {
+    const text = (await file.text()).replace(/^\uFEFF/, "");
+    return new Promise((res, rej) => Papa.parse(text, { header: true, skipEmptyLines: true, transformHeader: h => h.trim(), complete: r => res(r.data), error: rej }));
+  }
+  const wb = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+  return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "", raw: true })
+    .map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [String(k).trim(), v])));
+}
+
+/* ============ Meta parser ============ */
+const META_FIELDS = {
+  account_name: [/^nombre de la cuenta/, /^account name/],
+  impressions: [/^impresiones/, /^impressions/],
+  reach: [/^alcance/, /^reach/],
+  frequency: [/^frecuencia/, /^frequency/],
+  link_clicks: [/^clics en el enlace/, /^link clicks/],
+  conversations: [/conversaciones con mensajes iniciadas$/, /messaging conversations started$/],
+  cost_per_conversation: [/^costo por conversacion/, /^cost per messaging conversation/],
+  ctr: [/^ctr \(todos\)/, /^ctr \(all\)/, /^ctr/],
+  spend: [/^importe gastado/, /^amount spent/],
+  currency: [/^divisa/, /^currency/],
+  attribution: [/^configuracion de atribucion/, /^attribution setting/],
+  report_start: [/^inicio del informe/, /^reporting starts/],
+  report_end: [/^fin del informe/, /^reporting ends/]
+};
+const META_NUM = ["impressions","reach","frequency","link_clicks","conversations","cost_per_conversation","ctr","spend"];
+
+function parseMeta(rows) {
+  if (!rows.length) throw new Error("El archivo no tiene filas.");
+  const headers = [...new Set(rows.flatMap(r => Object.keys(r)))];
+  const cols = Object.fromEntries(Object.entries(META_FIELDS).map(([k, p]) => [k, findCol(headers, p)]));
+  const missing = ["impressions", "spend"].filter(k => !cols[k]);
+  if (missing.length) throw new Error("No parece un informe de Meta Ads: faltan las columnas de impresiones o importe gastado.");
+  const pick = r => {
+    const o = {};
+    for (const k in cols) { const v = cols[k] ? r[cols[k]] : null; o[k] = META_NUM.includes(k) ? parseNum(v) : (v === "" ? null : v); }
+    o.report_start = parseDate(o.report_start); o.report_end = parseDate(o.report_end);
+    return o;
+  };
+  const all = rows.map(pick);
+  const named = all.filter(r => r.account_name);
+  const total = all.find(r => !r.account_name);
+  let out, warnings = [];
+  if (named.length <= 1) out = { ...(total || {}), ...(named[0] || all[0]) };
+  else if (total) { out = { ...total, account_name: named[0].account_name }; }
+  else {
+    // Varias filas sin total: sumar y recalcular ratios
+    const sum = k => all.reduce((a, r) => a + (r[k] || 0), 0);
+    out = { ...all[0] };
+    ["impressions", "reach", "link_clicks", "conversations", "spend"].forEach(k => out[k] = sum(k));
+    out.frequency = div(out.impressions, out.reach);
+    out.cost_per_conversation = div(out.spend, out.conversations);
+    out.ctr = div(all.reduce((a, r) => a + (r.ctr || 0) * (r.impressions || 0), 0), out.impressions);
+    warnings.push("El informe tenía varias filas sin total; se sumaron. El alcance sumado puede sobrestimar personas únicas.");
+  }
+  if (out.cost_per_conversation == null) out.cost_per_conversation = div(out.spend, out.conversations);
+  if (!cols.conversations) warnings.push("No se encontró la columna de conversaciones con mensajes iniciadas.");
+  return { data: out, warnings };
+}
+
+/* ============ Kommo parser ============ */
+const KOMMO_FIELDS = {
+  stage: { label: "Etapa / estatus *", re: [/etapa del lead/, /^etapa/, /estatus/, /^status/, /^stage/] },
+  pipeline: { label: "Embudo", re: [/embudo/, /pipeline/] },
+  price: { label: "Venta / presupuesto", re: [/^venta$/, /presupuesto/, /^budget/, /^sale$/, /^price/, /valor/, /monto/] },
+  created: { label: "Fecha de creación", re: [/fecha de creacion/, /^creado/, /^created/, /^creacion/] },
+  source: { label: "Fuente de origen", re: [/fuente/, /origen/, /utm_source/, /source/] },
+  channel: { label: "Canal de entrada", re: [/canal de entrada/, /^canal/] },
+  tags: { label: "Etiquetas", re: [/^etiquetas/, /^tags$/] },
+  interest: { label: "Nivel de interés", re: [/nivel de interes/] },
+  nurture: { label: "Estado de nutrición", re: [/estado de nutricion/] },
+  responsible: { label: "Responsable", re: [/^respons/, /responsable/, /responsible/, /^usuario/, /asesor/, /vendedor/] },
+  loss_reason: { label: "Motivo de pérdida", re: [/motivo de perdida/, /razon de perdida/, /loss reason/, /motivo de no calificacion/, /objecion/] }
+};
+const STATUS = [["open", "Abierto"], ["scheduled", "Agendado"], ["won", "Ganado"], ["lost", "Perdido"]];
+const isMetaLead = r => /meta|facebook|anuncio|fb ads|paid/.test(norm(r.source) + " " + norm(r.channel));
+const isNewStage = s => /nuevo|sin contactar|entrante|incoming|new lead/.test(norm(s));
+function classifyStage(s) {
+  const n = norm(s);
+  if (/perdid|no logrado|lost|descartad|no interesad|cancelad|no calificad|spam/.test(n)) return "lost";
+  if (/logrado|ganad|won|exito|venta cerrada|venta realizada|pagad|cerrado con/.test(n)) return "won";
+  if (/agendad|cita|reservad|valoracion confirmada|scheduled/.test(n)) return "scheduled";
+  return "open";
+}
+function initKommo(rows) {
+  if (!rows.length) throw new Error("El archivo no tiene filas.");
+  const headers = [...new Set(rows.flatMap(r => Object.keys(r)))];
+  const map = Object.fromEntries(Object.entries(KOMMO_FIELDS).map(([k, f]) => [k, findCol(headers, f.re)]));
+  const k = { headers, map, stageClass: {}, onlyMonth: false, months: {} };
+  refreshStages(k, rows);
+  if (map.created) {
+    rows.forEach(r => { const d = parseDate(r[map.created]); if (d) k.months[d.slice(0, 7)] = (k.months[d.slice(0, 7)] || 0) + 1; });
+    const ms = Object.keys(k.months).sort();
+    k.suggested = ms[ms.length - 1];            // el mes más reciente del export
+    k.onlyMonth = ms.length > 1;                // export acumulado: contar por fecha de creación
+  }
+  return k;
+}
+function refreshStages(k, rows) {
+  const col = k.map.stage; const next = {};
+  if (col) rows.forEach(r => { const s = String(r[col] ?? "").trim() || "(sin etapa)"; if (!(s in next)) next[s] = k.stageClass[s] || classifyStage(s); });
+  k.stageClass = next;
+}
+function computeKommo(rows, k, period) {
+  const g = (r, f) => k.map[f] ? r[k.map[f]] : null;
+  let slim = rows.map(r => {
+    const stage = String(g(r, "stage") ?? "").trim() || "(sin etapa)";
+    return {
+      stage, status: k.stageClass[stage] || "open",
+      pipeline: g(r, "pipeline") || null,
+      price: parseNum(g(r, "price")) || 0,
+      created: parseDate(g(r, "created")),
+      source: String(g(r, "source") ?? "").trim() || null,
+      channel: String(g(r, "channel") ?? "").trim() || null,
+      tags: String(g(r, "tags") ?? "").split(",").map(t => t.trim()).filter(t => t && !/^importar_/i.test(t)),
+      interest: String(g(r, "interest") ?? "").trim() || null,
+      nurture: String(g(r, "nurture") ?? "").trim() || null,
+      responsible: String(g(r, "responsible") ?? "").trim() || null,
+      loss_reason: String(g(r, "loss_reason") ?? "").trim() || null
+    };
+  });
+  if (k.onlyMonth && k.map.created && period) slim = slim.filter(r => r.created && r.created.startsWith(period));
+  const sched = slim.filter(r => r.status === "scheduled");
+  const won = slim.filter(r => r.status === "won"), lost = slim.filter(r => r.status === "lost"), open = slim.filter(r => r.status === "open");
+  const revenue = won.reduce((a, r) => a + r.price, 0);
+  const count = (arr, f) => arr.reduce((o, r) => { const v = r[f] || "(sin dato)"; o[v] = (o[v] || 0) + 1; return o; }, {});
+  const stages = {}; slim.forEach(r => { stages[r.stage] = stages[r.stage] || { count: 0, status: r.status }; stages[r.stage].count++; });
+  const responsibles = {}; slim.forEach(r => { const n = r.responsible || "(sin dato)"; responsibles[n] = responsibles[n] || { total: 0, won: 0 }; responsibles[n].total++; if (r.status === "won") responsibles[n].won++; });
+  const total = slim.length;
+  const tags = {}; slim.forEach(r => (r.tags.length ? r.tags : ["(sin dato)"]).forEach(t => tags[t] = (tags[t] || 0) + 1));
+  const metaLeads = slim.filter(isMetaLead);
+  return {
+    metrics: {
+      total_leads: total, won_leads: won.length, lost_leads: lost.length, open_leads: open.length,
+      scheduled_leads: sched.length,
+      schedule_rate: total ? (sched.length + won.length) / total * 100 : null,
+      meta_leads: metaLeads.length,
+      revenue, avg_ticket: div(revenue, won.length), pipeline_value: open.reduce((a, r) => a + r.price, 0),
+      conversion_rate: total ? won.length / total * 100 : null,
+      win_rate: (won.length + lost.length) ? won.length / (won.length + lost.length) * 100 : null,
+      breakdown: {
+        stages, responsibles,
+        sources: k.map.source ? count(slim, "source") : {},
+        sources_won: k.map.source ? count(won, "source") : {},
+        loss_reasons: k.map.loss_reason ? count(lost.filter(r => r.loss_reason), "loss_reason") : {},
+        channels: k.map.channel ? count(slim, "channel") : {},
+        tags: k.map.tags ? tags : {},
+        interest: k.map.interest ? count(slim, "interest") : {},
+        nurture: k.map.nurture ? count(slim, "nurture") : {},
+        new_stage: slim.filter(r => isNewStage(r.stage)).length,
+        no_source: k.map.source ? slim.filter(r => !r.source).length : null,
+        meta_scheduled: metaLeads.filter(r => r.status === "scheduled" || r.status === "won").length,
+        has_outcomes: won.length + lost.length > 0,
+        has_price: !!k.map.price
+      }
+    },
+    slim
+  };
+}
+
+/* ============ Análisis cualitativo (reglas) ============ */
+const topOf = o => Object.entries(o || {}).filter(([k]) => k !== "(sin dato)").sort((a, b) => b[1] - a[1])[0];
+
+function analyzeMeta(m, p) {
+  const out = { summary: "", items: [], recs: [] };
+  const add = (tone, text) => out.items.push({ tone, text });
+  const rec = t => { if (!out.recs.includes(t)) out.recs.push(t); };
+  const cpm = div(m.spend, m.impressions) != null ? m.spend / m.impressions * 1000 : null;
+  const cvr = m.link_clicks ? m.conversations / m.link_clicks * 100 : null;
+  out.summary = `Con ${money(m.spend)} de inversión, la cuenta llegó a ${int(m.reach)} personas (${int(m.impressions)} impresiones) y abrió ${int(m.conversations)} conversaciones por mensaje a ${money(m.cost_per_conversation)} cada una.`;
+  const cov = coverage(m);
+  if (cov && cov.days < cov.dim) add("info", `El informe cubre ${cov.days} de ${cov.dim} días del mes; las comparaciones con meses completos pueden verse sesgadas.`);
+  if (m.ctr != null) {
+    if (m.ctr >= 1.5) add("good", `CTR de ${pctf(m.ctr)}: los anuncios generan interés por encima de la referencia general (~1%).`);
+    else if (m.ctr >= 0.8) add("info", `CTR de ${pctf(m.ctr)}, en rango aceptable; hay margen para mejorar ganchos y creatividades.`);
+    else { add("bad", `CTR de ${pctf(m.ctr)}, bajo: los anuncios no están captando atención.`); rec("Probar nuevos ganchos en los primeros 3 segundos, formatos Reels/Stories y testimonios de pacientes (respetando las políticas de Meta)."); }
+  }
+  if (m.frequency != null) {
+    if (m.frequency > 3.5) { add("bad", `Frecuencia de ${dec(m.frequency)}: la audiencia ve los anuncios demasiadas veces; riesgo de saturación.`); rec("Renovar creatividades y ampliar la audiencia para bajar la frecuencia."); }
+    else if (m.frequency > 2.5) { add("warn", `Frecuencia de ${dec(m.frequency)}, cerca del umbral de saturación (3 a 3,5).`); rec("Preparar una nueva tanda de creatividades para rotar en las próximas semanas."); }
+    else add("good", `Frecuencia de ${dec(m.frequency)}: la audiencia aún no está saturada.`);
+  }
+  if (cvr != null) {
+    if (cvr >= 15) add("good", `El ${dec(cvr)}% de los clics termina en conversación: el paso del anuncio al chat funciona bien.`);
+    else if (cvr < 5) { add("warn", `Solo el ${dec(cvr)}% de los clics se convierte en conversación; hay fricción entre anuncio y chat.`); rec("Revisar el mensaje de bienvenida del chat para que coincida con la promesa del anuncio."); }
+    else add("info", `El ${dec(cvr)}% de los clics termina en conversación.`);
+  }
+  if (cpm != null) add("info", `CPM de ${money(cpm)} (costo por mil impresiones).`);
+  if (p) {
+    const dc = pct(m.cost_per_conversation, p.cost_per_conversation), dv = pct(m.conversations, p.conversations), ds = pct(m.spend, p.spend);
+    const vs = monthName(p.period);
+    if (dc != null) {
+      if (dc > 20) { add("bad", `El costo por conversación subió ${dec(dc)}% frente a ${vs}.`); rec("Identificar los anuncios o conjuntos que encarecieron la conversación y pausar los de peor rendimiento."); }
+      else if (dc < -10) add("good", `El costo por conversación bajó ${dec(-dc)}% frente a ${vs}.`);
+      else add("info", `El costo por conversación se mantuvo estable frente a ${vs} (${signed(dc)}%).`);
+    }
+    if (dv != null && ds != null) {
+      if (ds > 0 && dv < 0) add("bad", `Se invirtió ${dec(ds)}% más pero hubo ${dec(-dv)}% menos conversaciones: la eficiencia cayó.`);
+      else if (dv > ds + 10) add("good", `Las conversaciones crecieron más (${signed(dv)}%) que la inversión (${signed(ds)}%).`);
+    }
+  } else add("info", "No hay mes anterior para comparar; este mes queda como línea base.");
+  if (!out.items.some(i => i.tone === "bad" || i.tone === "warn"))
+    rec("Indicadores saludables: escalar presupuesto de forma gradual (15–20% por semana) en los anuncios con menor costo por conversación.");
+  return out;
+}
+
+function analyzeKommo(k, p) {
+  const out = { summary: "", items: [], recs: [] };
+  const add = (tone, text) => out.items.push({ tone, text });
+  const rec = t => { if (!out.recs.includes(t)) out.recs.push(t); };
+  const b = k.breakdown || {}, total = k.total_leads || 0;
+  const share = n => total ? n / total * 100 : 0;
+  out.summary = `Ingresaron ${int(total)} leads nuevos en el mes; ${int(k.scheduled_leads + k.won_leads)} llegaron a valoración agendada o venta` +
+    (b.has_outcomes ? ` (${int(k.won_leads)} ganados y ${int(k.lost_leads)} perdidos).` : ".") +
+    (k.revenue ? ` Ventas ganadas: ${money(k.revenue)}, ticket promedio ${money(k.avg_ticket)}.` : "");
+  if (!total) { add("warn", "No hay leads creados en este mes."); return out; }
+
+  // Agendamiento: indicador principal del embudo
+  const sr = k.schedule_rate;
+  if (sr != null) {
+    if (sr >= 15) add("good", `Tasa de agendamiento de ${pctf(sr)}: buena capacidad de llevar leads a valoración.`);
+    else if (sr >= 5) add("info", `Tasa de agendamiento de ${pctf(sr)}: hay espacio para convertir más conversaciones en citas.`);
+    else { add("bad", `Tasa de agendamiento de ${pctf(sr)}: ${sr === 0 ? "ningún lead" : "casi ningún lead"} llegó a valoración.`); rec("Incluir una invitación directa a agendar valoración (con horarios concretos) en los primeros mensajes y en la nutrición."); }
+  }
+  if (b.has_outcomes) {
+    const cr = k.conversion_rate;
+    if (cr >= 20) add("good", `Conversión a venta de ${pctf(cr)}.`);
+    else if (cr < 10) { add("bad", `Conversión a venta de ${pctf(cr)}: pocos leads terminan en venta.`); rec("Revisar el guion posterior a la valoración y el seguimiento de quienes no compraron."); }
+    else add("info", `Conversión a venta de ${pctf(cr)}.`);
+  } else {
+    add("info", "El embudo no registra ventas ganadas ni perdidas; el indicador principal es el agendamiento de valoraciones.");
+    rec("Agregar en Kommo las etapas “Venta ganada” y “Venta perdida” (con motivo) para medir cierre, ingresos y retorno de la pauta.");
+  }
+
+  // Leads sin gestionar
+  if (b.new_stage) {
+    const s = share(b.new_stage);
+    if (s >= 20) { add("warn", `${int(b.new_stage)} leads (${dec(s)}%) siguen en la etapa inicial sin avanzar.`); rec("Contactar los leads en “Nuevo LEAD” el mismo día; la probabilidad de agendar cae rápido después de las primeras horas."); }
+    else add("good", `Solo ${int(b.new_stage)} leads siguen en la etapa inicial: el primer contacto está al día.`);
+  }
+  // Etapa con más leads
+  const topStage = Object.entries(b.stages || {}).sort((a, c) => c[1].count - a[1].count)[0];
+  if (topStage && share(topStage[1].count) >= 40) add("info", `La mayoría de leads (${dec(share(topStage[1].count))}%) está en “${esc(topStage[0])}”.`);
+  // Nutrición
+  const sinIniciar = Object.entries(b.nurture || {}).find(([n]) => /sin iniciar/.test(norm(n)));
+  if (sinIniciar && sinIniciar[1] > 0) { add("warn", `${sinIniciar[1]} leads tienen la nutrición sin iniciar.`); rec("Activar la secuencia de nutrición (N1) para todos los leads que no agendan en el primer contacto."); }
+  // Interés
+  const intTotal = Object.entries(b.interest || {}).filter(([n]) => n !== "(sin dato)").reduce((a, [, v]) => a + v, 0);
+  if (intTotal) {
+    const expl = Object.entries(b.interest).filter(([n]) => /explorando/.test(norm(n))).reduce((a, [, v]) => a + v, 0);
+    const ready = Object.entries(b.interest).filter(([n]) => /lista|listo|agendar/.test(norm(n))).reduce((a, [, v]) => a + v, 0);
+    add(expl / intTotal > 0.6 ? "warn" : "info", `De ${intTotal} leads con nivel de interés calificado, ${expl} solo están explorando y ${ready} están listos para agendar.`);
+    if (expl / intTotal > 0.6) rec("Reforzar en los anuncios la oferta concreta (precio de valoración, resultado esperado) para atraer leads con mayor intención.");
+    if (share(intTotal) < 50) rec(`Calificar el nivel de interés en más leads (hoy solo ${dec(share(intTotal))}% lo tiene).`);
+  }
+  // Fuentes y atribución
+  if (b.no_source != null && share(b.no_source) >= 20) { add("warn", `${int(b.no_source)} leads (${dec(share(b.no_source))}%) no tienen fuente de origen: se pierde la atribución a Meta.`); rec("Completar “Fuente de origen” en todos los leads (idealmente de forma automática desde la integración)."); }
+  const src = topOf(b.sources);
+  if (src) add("info", `Fuente principal: “${esc(src[0])}” con ${src[1]} leads (${dec(share(src[1]))}%).`);
+  const tag = topOf(b.tags);
+  if (tag) add("info", `Etiqueta con más leads: “${esc(tag[0])}” (${tag[1]}).`);
+  const loss = topOf(b.loss_reasons);
+  if (loss) {
+    add("warn", `Principal motivo de pérdida: “${esc(loss[0])}” (${loss[1]} leads).`);
+    if (/precio|caro|costo|presupuesto|dinero/.test(norm(loss[0]))) rec("Trabajar el valor percibido antes de dar precio: valoración, resultados esperados y facilidades de pago.");
+  }
+  if (p) {
+    const vs = monthName(p.period);
+    const dl = pct(k.total_leads, p.total_leads);
+    if (dl != null) add(dl >= 0 ? "good" : "warn", `Los leads nuevos ${dl >= 0 ? "crecieron" : "cayeron"} ${dec(Math.abs(dl))}% frente a ${vs}.`);
+    if (sr != null && p.schedule_rate != null && Math.abs(sr - p.schedule_rate) >= 2)
+      add(sr > p.schedule_rate ? "good" : "bad", `El agendamiento ${sr > p.schedule_rate ? "mejoró" : "empeoró"} ${dec(Math.abs(sr - p.schedule_rate))} puntos frente a ${vs}.`);
+    if (k.revenue && p.revenue) { const dr = pct(k.revenue, p.revenue); add(dr >= 0 ? "good" : "warn", `Los ingresos ${dr >= 0 ? "subieron" : "bajaron"} ${dec(Math.abs(dr))}% frente a ${vs}.`); }
+  } else add("info", "No hay mes anterior para comparar; este mes queda como línea base.");
+  return out;
+}
+
+function analyzeCross(m, k) {
+  const out = { summary: "", items: [], recs: [] };
+  const add = (tone, text) => out.items.push({ tone, text });
+  const rec = t => { if (!out.recs.includes(t)) out.recs.push(t); };
+  const b = k.breakdown || {};
+  const ml = k.meta_leads, cpl = div(m.spend, ml || k.total_leads), msch = b.meta_scheduled, cps = div(m.spend, msch);
+  out.summary = `${ml ? `${int(ml)} leads de Kommo vienen de Meta Ads, con un costo de ${money(cpl)} cada uno.` : `Costo por lead (sobre todos los leads): ${money(cpl)}.`}` +
+    (msch ? ` Cada valoración agendada desde Meta costó ${money(cps)}.` : " Ningún lead de Meta llegó aún a valoración agendada.");
+  if (m.conversations) {
+    const base = ml || k.total_leads, ratio = base / m.conversations;
+    if (ratio < 0.7) { add("warn", `Meta reporta ${int(m.conversations)} conversaciones pero Kommo tiene ${int(base)} leads atribuidos a Meta: parte de las conversaciones no se registra o no se etiqueta.`); rec("Verificar que cada conversación de anuncio cree un lead con “Fuente de origen = META Ads”."); }
+    else if (ratio > 1.3) add("info", `Kommo atribuye a Meta más leads (${int(base)}) que conversaciones reportadas (${int(m.conversations)}); puede incluir leads que llegaron por otras vías tras ver el anuncio.`);
+    else add("good", `Las ${int(m.conversations)} conversaciones de Meta y los ${int(base)} leads atribuidos en Kommo están alineados.`);
+  }
+  if (!msch && ml >= 10) { add("bad", "La pauta genera conversaciones, pero ninguna llegó a valoración: el cuello de botella está en la gestión comercial, no en los anuncios."); rec("Antes de subir presupuesto en Meta, mejorar el guion de agendamiento y el seguimiento de leads de anuncios."); }
+  const roas = div(k.revenue, m.spend);
+  if (k.revenue > 0 && roas != null) {
+    if (roas >= 3) add("good", `ROAS de ${dec(roas)}x: cada dólar en Meta retorna ${money(roas)} en ventas.`);
+    else if (roas >= 1) add("info", `ROAS de ${dec(roas)}x: la pauta se paga, con margen estrecho.`);
+    else add("bad", `ROAS de ${dec(roas)}x: las ventas no cubren la inversión publicitaria.`);
+  }
+  return out;
+}
+
+/* ============ Data ============ */
+async function loadData() {
+  const [m, k] = await Promise.all([
+    db.from("meta_reports").select("*").order("period"),
+    db.from("kommo_reports").select("id,period,file_name,total_leads,won_leads,lost_leads,open_leads,scheduled_leads,schedule_rate,meta_leads,revenue,avg_ticket,pipeline_value,conversion_rate,win_rate,breakdown,updated_at").order("period")
+  ]);
+  if (m.error) throw m.error; if (k.error) throw k.error;
+  const numify = (r, keys) => { keys.forEach(x => r[x] = N(r[x])); return r; };
+  S.meta = m.data.map(r => numify(r, META_NUM));
+  S.kommo = k.data.map(r => numify(r, ["total_leads","won_leads","lost_leads","open_leads","scheduled_leads","schedule_rate","meta_leads","revenue","avg_ticket","pipeline_value","conversion_rate","win_rate"]));
+}
+const periods = () => [...new Set([...S.meta, ...S.kommo].map(r => r.period))].sort().reverse();
+const at = (arr, p) => arr.find(r => r.period === p) || null;
+const prevOf = (arr, p) => [...arr].filter(r => r.period < p).sort((a, b) => b.period.localeCompare(a.period))[0] || null;
+
+/* ============ Render ============ */
+function renderRail() {
+  const ps = periods();
+  $("#rail").innerHTML = ps.length ? ps.map(p => `<li><button data-p="${p}" aria-current="${S.view === "dash" && S.selected === p}">
+    <span>${monthName(p)}</span><span class="dots"><i class="dot ${at(S.meta, p) ? "m" : ""}" title="Meta"></i><i class="dot ${at(S.kommo, p) ? "k" : ""}" title="Kommo"></i></span></button></li>`).join("")
+    : `<li class="muted" style="font-size:13px">Aún no hay meses.</li>`;
+  $("#rail").querySelectorAll("button").forEach(b => b.onclick = () => { S.selected = b.dataset.p; S.view = "dash"; render(); });
+}
+function kpi(label, value, curV, prevV, better, fmt) {
+  let d = "";
+  if (prevV != null && curV != null && prevV !== 0) {
+    const pc = (curV - prevV) / Math.abs(prevV) * 100;
+    const up = pc >= 0, cls = better ? ((up === (better === "up")) ? (up ? "up-good" : "down-good") : (up ? "up-bad" : "down-bad")) : "";
+    d = `<span class="${cls}">${up ? "▲" : "▼"} ${nf2.format(Math.abs(pc))}%</span> vs mes ant.`;
+  } else if (prevV != null && fmt) d = `ant. ${fmt(prevV)}`;
+  return `<div class="kpi"><div class="l">${label}</div><div class="v">${value}</div><div class="d">${d || "&nbsp;"}</div></div>`;
+}
+function analysisHTML(a) {
+  const label = { good: "Fortaleza", warn: "Alerta", bad: "Crítico", info: "Dato" };
+  return `<div class="analysis"><p class="summary">${a.summary}</p>
+    <ul>${a.items.map(i => `<li><span class="tag ${i.tone}">${label[i.tone]}</span><span>${i.text}</span></li>`).join("")}</ul>
+    ${a.recs.length ? `<div class="recs"><h4>Recomendaciones</h4><ol>${a.recs.map(r => `<li>${r}</li>`).join("")}</ol></div>` : ""}</div>`;
+}
+function destroyCharts() { S.charts.forEach(c => c.destroy()); S.charts = []; }
+function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function chart(id, cfg) {
+  const el = document.getElementById(id); if (!el) return;
+  Chart.defaults.font.family = css("--body"); Chart.defaults.color = css("--muted"); Chart.defaults.borderColor = css("--line");
+  S.charts.push(new Chart(el, { ...cfg, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 12 } } }, ...cfg.options } }));
+}
+
+function renderDash() {
+  const main = $("#main");
+  if (!periods().length) {
+    main.innerHTML = `<div class="empty"><h2>Sube tu primer informe</h2><p>Carga el export mensual de Meta Ads o Kommo para ver métricas y análisis.</p><button class="btn primary" onclick="openUpload()">Subir informe</button></div>`;
+    return;
+  }
+  if (!S.selected || !periods().includes(S.selected)) S.selected = periods()[0];
+  const p = S.selected, m = at(S.meta, p), k = at(S.kommo, p), pm = prevOf(S.meta, p), pk = prevOf(S.kommo, p);
+  const cov = m && coverage(m);
+  let h = `<div class="head"><div><h1>${monthName(p)}</h1>
+    <p>${m?.report_start ? `Meta: ${esc(m.report_start)} al ${esc(m.report_end)}${cov && cov.days < cov.dim ? ` (${cov.days} de ${cov.dim} días)` : ""}` : "Sin informe de Meta"}${pm || pk ? `. Comparado con ${monthName((pm || pk).period)}.` : ""}</p></div></div>`;
+
+  // Meta
+  h += `<section class="block meta"><div class="block-title"><h2>Meta Ads</h2><span class="note">${esc(m?.account_name || "")}</span></div>`;
+  if (m) {
+    const cpm = div(m.spend, m.impressions) * 1000, pcpm = pm ? div(pm.spend, pm.impressions) * 1000 : null;
+    h += `<div class="kpis">
+      ${kpi("Importe gastado", money(m.spend), m.spend, pm?.spend, null, money)}
+      ${kpi("Conversaciones iniciadas", int(m.conversations), m.conversations, pm?.conversations, "up")}
+      ${kpi("Costo por conversación", money(m.cost_per_conversation), m.cost_per_conversation, pm?.cost_per_conversation, "down")}
+      ${kpi("Alcance", int(m.reach), m.reach, pm?.reach, "up")}
+      ${kpi("Impresiones", int(m.impressions), m.impressions, pm?.impressions, "up")}
+      ${kpi("Frecuencia", dec(m.frequency), m.frequency, pm?.frequency, null, dec)}
+      ${kpi("Clics en el enlace", int(m.link_clicks), m.link_clicks, pm?.link_clicks, "up")}
+      ${kpi("CTR (todos)", pctf(m.ctr), m.ctr, pm?.ctr, "up")}
+      ${kpi("CPM", money(cpm), cpm, pcpm, "down")}
+    </div><div class="panel" style="margin-top:18px"><h3>Análisis de Meta</h3>${analysisHTML(analyzeMeta(m, pm))}</div>`;
+  } else h += `<p class="muted">No hay informe de Meta para este mes. <button class="btn small" onclick="openUpload('meta')">Subir Meta</button></p>`;
+  h += `</section>`;
+
+  // Kommo
+  h += `<section class="block kommo"><div class="block-title"><h2>Kommo CRM</h2><span class="note">${esc(k?.file_name || "")}</span></div>`;
+  if (k) {
+    const bk = k.breakdown || {}, out = bk.has_outcomes, rev = k.revenue > 0;
+    h += `<div class="kpis">
+      ${kpi("Leads nuevos", int(k.total_leads), k.total_leads, pk?.total_leads, "up")}
+      ${kpi("Leads de Meta Ads", int(k.meta_leads), k.meta_leads, pk?.meta_leads, "up")}
+      ${kpi("Valoraciones agendadas", int(k.scheduled_leads + k.won_leads), k.scheduled_leads + k.won_leads, pk ? (pk.scheduled_leads || 0) + (pk.won_leads || 0) : null, "up")}
+      ${kpi("Tasa de agendamiento", pctf(k.schedule_rate), k.schedule_rate, pk?.schedule_rate, "up")}
+      ${kpi("En etapa inicial", int(bk.new_stage), bk.new_stage, pk?.breakdown?.new_stage, "down")}
+      ${bk.no_source != null ? kpi("Sin fuente de origen", int(bk.no_source), bk.no_source, pk?.breakdown?.no_source, "down") : ""}
+      ${out ? kpi("Ganados", int(k.won_leads), k.won_leads, pk?.won_leads, "up") : ""}
+      ${out ? kpi("Perdidos", int(k.lost_leads), k.lost_leads, pk?.lost_leads, "down") : ""}
+      ${out ? kpi("Conversión a venta", pctf(k.conversion_rate), k.conversion_rate, pk?.conversion_rate, "up") : ""}
+      ${rev ? kpi("Ingresos", money(k.revenue), k.revenue, pk?.revenue, "up") : ""}
+      ${rev ? kpi("Ticket promedio", money(k.avg_ticket), k.avg_ticket, pk?.avg_ticket, "up") : ""}
+    </div>
+    <div class="grid2"><div class="panel"><h3>Leads por etapa</h3><div class="chart-box"><canvas id="cStages"></canvas></div></div>
+    <div class="panel"><h3>Leads por fuente</h3>${Object.keys(k.breakdown?.sources || {}).length ? `<div class="chart-box"><canvas id="cSources"></canvas></div>` : `<p class="muted">El informe no incluye columna de fuente.</p>`}</div>
+    ${Object.keys(bk.tags || {}).length ? `<div class="panel"><h3>Leads por etiqueta</h3><div class="chart-box"><canvas id="cTags"></canvas></div></div>` : ""}
+    ${Object.keys(bk.interest || {}).length ? `<div class="panel"><h3>Nivel de interés</h3><div class="chart-box"><canvas id="cInterest"></canvas></div></div>` : ""}</div>
+    <div class="panel" style="margin-top:18px"><h3>Análisis de Kommo</h3>${analysisHTML(analyzeKommo(k, pk))}</div>`;
+  } else h += `<p class="muted">No hay informe de Kommo para este mes. <button class="btn small" onclick="openUpload('kommo')">Subir Kommo</button></p>`;
+  h += `</section>`;
+
+  // Cruce
+  if (m && k) {
+    const cpl = div(m.spend, k.meta_leads || k.total_leads), cac = div(m.spend, k.breakdown?.meta_scheduled), roas = div(k.revenue, m.spend);
+    const pcpl = pm && pk ? div(pm.spend, pk.meta_leads || pk.total_leads) : null, pcac = pm && pk ? div(pm.spend, pk.breakdown?.meta_scheduled) : null, proas = pm && pk ? div(pk.revenue, pm.spend) : null;
+    h += `<section class="block cross"><div class="block-title"><h2>Meta + Kommo</h2><span class="note">Pauta frente a resultados comerciales</span></div>
+      <div class="kpis">${kpi("Costo por lead de Meta", money(cpl), cpl, pcpl, "down")}${kpi("Costo por valoración (Meta)", money(cac), cac, pcac, "down")}
+      ${kpi("Leads Kommo / conversaciones", m.conversations ? pctf((k.meta_leads || k.total_leads) / m.conversations * 100) : "–")}
+      ${k.revenue > 0 ? kpi("ROAS", roas != null ? dec(roas) + "x" : "–", roas, proas, "up") : ""}</div>
+      <div class="panel" style="margin-top:18px"><h3>Análisis combinado</h3>${analysisHTML(analyzeCross(m, k))}</div></section>`;
+  }
+
+  // Tendencias
+  const all = periods().slice().reverse();
+  if (all.length > 1) h += `<section class="block"><div class="block-title"><h2>Evolución mensual</h2></div><div class="grid2">
+    <div class="panel"><h3>Inversión y conversaciones</h3><div class="chart-box"><canvas id="cTrendMeta"></canvas></div></div>
+    <div class="panel"><h3>Leads y valoraciones</h3><div class="chart-box"><canvas id="cTrendKommo"></canvas></div></div></div></section>`;
+
+  main.innerHTML = h;
+  destroyCharts();
+  if (k) {
+    const st = Object.entries(k.breakdown?.stages || {}).sort((a, b) => b[1].count - a[1].count);
+    const col = s => s === "won" ? css("--good") : s === "lost" ? css("--bad") : s === "scheduled" ? css("--accent") : css("--kommo");
+    chart("cStages", { type: "bar", data: { labels: st.map(s => s[0]), datasets: [{ label: "Leads", data: st.map(s => s[1].count), backgroundColor: st.map(s => col(s[1].status)) }] },
+      options: { indexAxis: "y", plugins: { legend: { display: false } } } });
+    const so = Object.entries(k.breakdown?.sources || {}).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    if (so.length) chart("cSources", { type: "bar", data: { labels: so.map(s => s[0]), datasets: [
+      { label: "Leads", data: so.map(s => s[1]), backgroundColor: css("--kommo") },
+      { label: "Ganados", data: so.map(s => k.breakdown.sources_won?.[s[0]] || 0), backgroundColor: css("--good") }] },
+      options: { indexAxis: "y" } });
+    const simple = (id, obj, color) => { const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      if (e.length) chart(id, { type: "bar", data: { labels: e.map(x => x[0]), datasets: [{ label: "Leads", data: e.map(x => x[1]), backgroundColor: color }] }, options: { indexAxis: "y", plugins: { legend: { display: false } } } }); };
+    simple("cTags", k.breakdown?.tags, css("--meta"));
+    simple("cInterest", k.breakdown?.interest, css("--accent"));
+  }
+  if (all.length > 1) {
+    const labels = all.map(p => monthName(p, true));
+    chart("cTrendMeta", { type: "bar", data: { labels, datasets: [
+      { label: "Gasto (USD)", data: all.map(p => at(S.meta, p)?.spend ?? null), backgroundColor: css("--meta"), yAxisID: "y" },
+      { label: "Conversaciones", type: "line", data: all.map(p => at(S.meta, p)?.conversations ?? null), borderColor: css("--accent"), backgroundColor: css("--accent"), yAxisID: "y1", tension: .3 }] },
+      options: { scales: { y: { beginAtZero: true, position: "left" }, y1: { beginAtZero: true, position: "right", grid: { drawOnChartArea: false } } } } });
+    chart("cTrendKommo", { type: "bar", data: { labels, datasets: [
+      { label: "Leads", data: all.map(p => at(S.kommo, p)?.total_leads ?? null), backgroundColor: css("--kommo") },
+      { label: "Valoraciones agendadas", data: all.map(p => { const r = at(S.kommo, p); return r ? (r.scheduled_leads || 0) + (r.won_leads || 0) : null; }), backgroundColor: css("--accent") }] },
+      options: { scales: { y: { beginAtZero: true } } } });
+  }
+}
+
+/* ============ Upload ============ */
+function openUpload(platform) { S.view = "upload"; if (platform) S.up.platform = platform; resetUpload(); render(); }
+function resetUpload() { Object.assign(S.up, { file: null, rows: null, meta: null, k: null, error: null }); }
+function defaultMonth() { const d = new Date(); d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; }
+
+function renderUpload() {
+  const u = S.up;
+  $("#main").innerHTML = `<div class="head"><div><h1>Subir informe</h1><p>Un informe por plataforma y mes. Si el mes ya existe, se reemplaza.</p></div>
+    <button class="btn" onclick="S.view='dash';render()">Volver al dashboard</button></div>
+    <div class="seg" role="group" aria-label="Plataforma">
+      <button aria-pressed="${u.platform === "meta"}" data-pl="meta">Meta Ads</button>
+      <button aria-pressed="${u.platform === "kommo"}" data-pl="kommo">Kommo CRM</button></div>
+    <label class="drop" id="drop"><input type="file" id="file" accept=".csv,.xlsx,.xls" class="hidden">
+      <strong>${u.file ? esc(u.file.name) : "Elige o arrastra el archivo"}</strong>
+      <span>${u.platform === "meta" ? "Export de Meta Ads Manager a nivel de cuenta (CSV o Excel)" : "Export de leads de Kommo (CSV o Excel)"}</span></label>
+    <div id="preview"></div>
+    <section class="block"><div class="block-title"><h2>Historial</h2></div>${historyHTML()}</section>`;
+  document.querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { u.platform = b.dataset.pl; resetUpload(); renderUpload(); });
+  const drop = $("#drop"), inp = $("#file");
+  inp.onchange = () => inp.files[0] && handleFile(inp.files[0]);
+  drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+  drop.ondragleave = () => drop.classList.remove("over");
+  drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); e.dataTransfer.files[0] && handleFile(e.dataTransfer.files[0]); };
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = () => delReport(b.dataset.del, b.dataset.p));
+  renderPreview();
+}
+
+async function handleFile(file) {
+  const u = S.up; u.file = file; u.error = null; u.meta = null; u.k = null;
+  try {
+    u.rows = await readFile(file);
+    if (u.platform === "meta") {
+      u.meta = parseMeta(u.rows);
+      u.month = u.meta.data.report_start ? u.meta.data.report_start.slice(0, 7) : defaultMonth();
+    } else {
+      u.k = initKommo(u.rows);
+      u.month = u.k.suggested || defaultMonth();
+    }
+  } catch (e) { u.error = e.message || String(e); }
+  renderUpload();
+}
+
+function renderPreview() {
+  const u = S.up, el = $("#preview"); if (!el) return;
+  if (u.error) { el.innerHTML = `<div class="alert err">${esc(u.error)}</div>`; return; }
+  if (!u.rows) { el.innerHTML = ""; return; }
+  const exists = (u.platform === "meta" ? S.meta : S.kommo).some(r => r.period === u.month);
+  let h = `<div class="form-row"><label class="f">Mes del informe<input type="month" id="month" value="${u.month}"></label>
+    <button class="btn primary" id="save">${exists ? "Reemplazar informe" : "Guardar informe"}</button></div>
+    ${exists ? `<div class="alert">Ya existe un informe de ${u.platform === "meta" ? "Meta" : "Kommo"} para ${monthName(u.month)}. Al guardar se reemplazará.</div>` : ""}`;
+
+  if (u.platform === "meta") {
+    const d = u.meta.data;
+    const rows = [["Cuenta", esc(d.account_name)], ["Periodo", `${esc(d.report_start)} al ${esc(d.report_end)}`], ["Importe gastado", money(d.spend)], ["Impresiones", int(d.impressions)], ["Alcance", int(d.reach)],
+      ["Frecuencia", dec(d.frequency)], ["Clics en el enlace", int(d.link_clicks)], ["Conversaciones iniciadas", int(d.conversations)], ["Costo por conversación", money(d.cost_per_conversation)], ["CTR (todos)", pctf(d.ctr)], ["Atribución", esc(d.attribution)]];
+    h += u.meta.warnings.map(w => `<div class="alert">${esc(w)}</div>`).join("");
+    h += `<div class="panel" style="margin-top:18px"><h3>Vista previa</h3><table>${rows.map(r => `<tr><th>${r[0]}</th><td class="num">${r[1]}</td></tr>`).join("")}</table></div>`;
+  } else {
+    const k = u.k, res = computeKommo(u.rows, k, u.month); u.kres = res;
+    const opt = f => `<option value="">(no usar)</option>` + k.headers.map(hd => `<option ${k.map[f] === hd ? "selected" : ""}>${esc(hd)}</option>`).join("");
+    h += `<div class="panel" style="margin-top:18px"><h3>Columnas del archivo</h3><p class="muted" style="margin-top:0">Se detectaron automáticamente; corrige si alguna no corresponde.</p>
+      <div class="map-grid">${Object.entries(KOMMO_FIELDS).map(([f, def]) => `<label class="f">${def.label}<select data-map="${f}">${opt(f)}</select></label>`).join("")}</div>
+      ${k.map.created ? `<label style="display:flex;gap:8px;align-items:center;margin-top:14px;font-size:14px"><input type="checkbox" id="onlyMonth" ${k.onlyMonth ? "checked" : ""}> Contar solo leads creados en el mes seleccionado</label>` : ""}</div>`;
+    const ms = Object.keys(k.months || {}).sort();
+    if (ms.length > 1) h += `<div class="alert">El archivo trae leads de ${ms.length} meses (${ms.map(x => `${monthName(x, true)}: ${k.months[x]}`).join(", ")}). Se cuentan por fecha de creación; la etapa es la actual de cada lead.
+      <div style="margin-top:10px"><button class="btn small" id="saveAll">Guardar los ${ms.length} meses del archivo</button></div></div>`;
+    if (!k.map.stage) h += `<div class="alert err">Selecciona la columna de etapa o estatus para clasificar los leads.</div>`;
+    else {
+      const counts = {}; res.slim.forEach(r => counts[r.stage] = (counts[r.stage] || 0) + 1);
+      h += `<div class="panel" style="margin-top:18px"><h3>Clasificación de etapas</h3><p class="muted" style="margin-top:0">Indica qué etapas cuentan como venta ganada o perdida.</p>
+        <div class="scroll"><table><tr><th>Etapa</th><th class="num">Leads</th><th>Cuenta como</th></tr>
+        ${Object.keys(k.stageClass).map(s => `<tr><td>${esc(s)}</td><td class="num">${counts[s] || 0}</td><td><select data-stage="${esc(s)}">
+          ${STATUS.map(([v, l]) => `<option value="${v}" ${k.stageClass[s] === v ? "selected" : ""}>${l}</option>`).join("")}</select></td></tr>`).join("")}
+        </table></div></div>`;
+      const mt = res.metrics;
+      h += `<div class="kpis" style="margin-top:18px">${kpi("Leads", int(mt.total_leads))}${kpi("De Meta Ads", int(mt.meta_leads))}${kpi("Agendados", int(mt.scheduled_leads + mt.won_leads))}${kpi("Tasa de agendamiento", pctf(mt.schedule_rate))}${mt.breakdown.has_outcomes ? kpi("Ganados", int(mt.won_leads)) + kpi("Perdidos", int(mt.lost_leads)) : ""}${mt.revenue ? kpi("Ingresos", money(mt.revenue)) : ""}</div>`;
+    }
+  }
+  el.innerHTML = h;
+  $("#month").onchange = e => { u.month = e.target.value; renderPreview(); };
+  $("#save").onclick = saveReport;
+  if (u.platform === "kommo") {
+    el.querySelectorAll("[data-map]").forEach(s => s.onchange = () => { u.k.map[s.dataset.map] = s.value || null; if (s.dataset.map === "stage") refreshStages(u.k, u.rows); renderPreview(); });
+    el.querySelectorAll("[data-stage]").forEach(s => s.onchange = () => { u.k.stageClass[s.dataset.stage] = s.value; renderPreview(); });
+    const om = $("#onlyMonth"); if (om) om.onchange = () => { u.k.onlyMonth = om.checked; renderPreview(); };
+    const sa = $("#saveAll"); if (sa) { sa.onclick = saveAllMonths; if (!u.k.map.stage) sa.disabled = true; }
+    if (!u.k.map.stage) $("#save").disabled = true;
+  }
+}
+
+async function saveReport() {
+  const u = S.up, btn = $("#save");
+  if (!/^\d{4}-\d{2}$/.test(u.month || "")) return toast("Selecciona el mes del informe.");
+  btn.disabled = true; btn.textContent = "Guardando…";
+  try {
+    let table, rec;
+    if (u.platform === "meta") {
+      table = "meta_reports";
+      rec = { ...u.meta.data, period: u.month, file_name: u.file.name, raw: u.rows, updated_at: new Date().toISOString() };
+    } else {
+      table = "kommo_reports";
+      const res = computeKommo(u.rows, u.k, u.month);
+      rec = { ...res.metrics, period: u.month, file_name: u.file.name, rows: res.slim,
+        mapping: { map: u.k.map, stageClass: u.k.stageClass, onlyMonth: u.k.onlyMonth }, updated_at: new Date().toISOString() };
+    }
+    const { error } = await db.from(table).upsert(rec, { onConflict: "period" });
+    if (error) throw error;
+    await loadData();
+    S.selected = u.month; S.view = "dash"; resetUpload();
+    toast("Informe guardado"); render();
+  } catch (e) {
+    btn.disabled = false; btn.textContent = "Guardar informe";
+    toast("No se pudo guardar: " + (e.message || e));
+  }
+}
+
+function kommoRecord(period) {
+  const u = S.up, k = { ...u.k, onlyMonth: true }, res = computeKommo(u.rows, k, period);
+  return { ...res.metrics, period, file_name: u.file.name, rows: res.slim,
+    mapping: { map: k.map, stageClass: k.stageClass, onlyMonth: true }, updated_at: new Date().toISOString() };
+}
+async function saveAllMonths() {
+  const u = S.up, ms = Object.keys(u.k.months).sort();
+  const existing = ms.filter(p => S.kommo.some(r => r.period === p));
+  if (existing.length && !confirm(`Se reemplazarán los informes de Kommo de: ${existing.map(p => monthName(p)).join(", ")}. ¿Continuar?`)) return;
+  const btn = $("#saveAll"); btn.disabled = true; btn.textContent = "Guardando…";
+  const { error } = await db.from("kommo_reports").upsert(ms.map(kommoRecord), { onConflict: "period" });
+  if (error) { btn.disabled = false; btn.textContent = "Reintentar"; return toast("No se pudo guardar: " + error.message); }
+  await loadData(); S.selected = ms[ms.length - 1]; S.view = "dash"; resetUpload();
+  toast(`${ms.length} meses guardados`); render();
+}
+
+function historyHTML() {
+  const ps = periods();
+  if (!ps.length) return `<p class="muted">Aún no hay informes guardados.</p>`;
+  const cell = (arr, t, p) => { const r = at(arr, p); return r ? `${esc(r.file_name || "Cargado")} <button class="btn small danger" data-del="${t}" data-p="${p}">Eliminar</button>` : `<span class="muted">Pendiente</span>`; };
+  return `<div class="scroll"><table><tr><th>Mes</th><th>Meta Ads</th><th>Kommo CRM</th></tr>
+    ${ps.map(p => `<tr><td style="text-transform:capitalize">${monthName(p)}</td><td>${cell(S.meta, "meta_reports", p)}</td><td>${cell(S.kommo, "kommo_reports", p)}</td></tr>`).join("")}</table></div>`;
+}
+async function delReport(table, p) {
+  if (!confirm(`¿Eliminar el informe de ${table === "meta_reports" ? "Meta" : "Kommo"} de ${monthName(p)}? No se puede deshacer.`)) return;
+  const { error } = await db.from(table).delete().eq("period", p);
+  if (error) return toast("No se pudo eliminar: " + error.message);
+  await loadData(); toast("Informe eliminado"); render();
+}
+
+/* ============ Main ============ */
+function render() {
+  renderRail();
+  S.view === "upload" ? renderUpload() : renderDash();
+}
+$("#btnUpload").onclick = () => openUpload();
+
+(async function init() {
+  if (!configured) {
+    $("#main").innerHTML = `<div class="empty"><h2>Conecta Supabase</h2><p>Edita <b>config.js</b> con la URL y la anon key de tu proyecto, y ejecuta <b>supabase/schema.sql</b> en el SQL Editor.</p></div>`;
+    return;
+  }
+  try { await loadData(); render(); }
+  catch (e) { $("#main").innerHTML = `<div class="alert err">No se pudo leer Supabase: ${esc(e.message || e)}. Verifica config.js y que ejecutaste schema.sql.</div>`; }
+})();
+</script>
+</body>
+</html>
