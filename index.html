@@ -123,6 +123,10 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .scroll{overflow-x:auto}
 .alert{padding:12px 14px;border-radius:8px;border:1px solid var(--warn);color:var(--warn);margin-top:14px;font-size:14px}
 .alert.err{border-color:var(--bad);color:var(--bad)}
+tr.grp td{background:var(--bg);font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:6px 10px}
+.ev{font-weight:600}.ev.up-good{color:var(--good);font-weight:700}.ev.up-bad{color:var(--bad);font-weight:700}
+.inline-sel{padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);text-transform:capitalize}
+.cross .grid2 .panel{margin-top:0}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:8px;font-weight:600;z-index:10;opacity:0;transition:opacity .2s}
 .toast.show{opacity:1}
 .muted{color:var(--muted)}
@@ -164,7 +168,7 @@ const configProblem = !window.APP_CONFIG ? "Falta la configuración de Supabase 
   : !window.supabase ? "No se pudo cargar la librería de Supabase: revisa tu conexión o bloqueadores de contenido." : null;
 const db = !configProblem ? window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY) : null;
 
-const S = { meta: [], kommo: [], selected: null, view: "dash", charts: [],
+const S = { meta: [], kommo: [], selected: null, compareA: null, view: "dash", charts: [],
   up: { platform: "meta", file: null, rows: null, meta: null, k: null } };
 
 /* ============ Utils ============ */
@@ -525,6 +529,100 @@ function analyzeCross(m, k) {
   return out;
 }
 
+/* ============ Evaluación entre meses ============ */
+const agend = k => k ? (k.scheduled_leads || 0) + (k.won_leads || 0) : null;
+const METRICS = [
+  { g: "Meta Ads", label: "Importe gastado", v: m => m?.spend, f: money, better: null },
+  { g: "Meta Ads", label: "Conversaciones iniciadas", v: m => m?.conversations, f: int, better: "up", trend: true },
+  { g: "Meta Ads", label: "Costo por conversación", v: m => m?.cost_per_conversation, f: money, better: "down", trend: true,
+    rec: "Renovar creatividades y pausar los anuncios con mayor costo por conversación." },
+  { g: "Meta Ads", label: "Alcance", v: m => m?.reach, f: int, better: "up" },
+  { g: "Meta Ads", label: "Frecuencia", v: m => m?.frequency, f: dec, better: null },
+  { g: "Meta Ads", label: "CTR (todos)", v: m => m?.ctr, f: pctf, better: "up", rate: true, trend: true,
+    rec: "Probar nuevos ganchos y formatos: el interés en los anuncios está bajando." },
+  { g: "Meta Ads", label: "CPM", v: m => m && m.impressions ? m.spend / m.impressions * 1000 : null, f: money, better: "down" },
+  { g: "Kommo CRM", label: "Leads nuevos", v: (m, k) => k?.total_leads, f: int, better: "up", trend: true },
+  { g: "Kommo CRM", label: "Leads de Meta Ads", v: (m, k) => k?.meta_leads, f: int, better: "up" },
+  { g: "Kommo CRM", label: "Valoraciones agendadas", v: (m, k) => agend(k), f: int, better: "up", trend: true,
+    rec: "Reforzar el guion de agendamiento y ofrecer horarios concretos en el primer contacto." },
+  { g: "Kommo CRM", label: "Tasa de agendamiento", v: (m, k) => k?.schedule_rate, f: pctf, better: "up", rate: true, trend: true,
+    rec: "Revisar tiempos de respuesta y seguimiento: menos leads llegan a valoración." },
+  { g: "Kommo CRM", label: "En etapa inicial", v: (m, k) => k?.breakdown?.new_stage, f: int, better: "down",
+    rec: "Contactar el mismo día todos los leads que entran a “Nuevo LEAD”." },
+  { g: "Kommo CRM", label: "Sin fuente de origen", v: (m, k) => k?.breakdown?.no_source, f: int, better: "down",
+    rec: "Completar la fuente de origen para no perder la atribución a Meta." },
+  { g: "Kommo CRM", label: "Ventas ganadas", v: (m, k) => k?.breakdown?.has_outcomes ? k.won_leads : null, f: int, better: "up", trend: true },
+  { g: "Kommo CRM", label: "Ingresos", v: (m, k) => k?.revenue > 0 ? k.revenue : null, f: money, better: "up", trend: true },
+  { g: "Meta + Kommo", label: "Costo por lead de Meta", v: (m, k) => m && k ? div(m.spend, k.meta_leads || k.total_leads) : null, f: money, better: "down", trend: true },
+  { g: "Meta + Kommo", label: "Costo por valoración (Meta)", v: (m, k) => m && k ? div(m.spend, k.breakdown?.meta_scheduled) : null, f: money, better: "down" },
+  { g: "Meta + Kommo", label: "Leads Kommo / conversaciones", v: (m, k) => m && k && m.conversations ? (k.meta_leads || k.total_leads) / m.conversations * 100 : null, f: pctf, better: "up", rate: true,
+    rec: "Verificar que cada conversación de anuncio se registre como lead en Kommo." }
+];
+const valAt = (mt, p) => { const v = mt.v(at(S.meta, p), at(S.kommo, p)); return v == null || isNaN(v) ? null : v; };
+function evalChange(mt, a, b) {
+  if (a == null || b == null) return { cls: "", txt: "Sin dato", d: null };
+  const d = mt.rate ? b - a : pct(b, a);
+  if (d == null) return { cls: "", txt: "–", d: null };
+  const dtxt = mt.rate ? `${signed(d)} pts` : `${signed(d)}%`, th = mt.rate ? 1 : 5;
+  if (Math.abs(d) < th) return { cls: "", txt: "Estable", d, dtxt };
+  if (!mt.better) return { cls: "", txt: d > 0 ? "Subió" : "Bajó", d, dtxt };
+  const good = (d > 0) === (mt.better === "up");
+  return { cls: good ? "up-good" : "up-bad", txt: good ? "Mejoró" : "Empeoró", d, dtxt };
+}
+function compareTable(pa, pb) {
+  let g = "";
+  const rows = METRICS.map(mt => ({ mt, a: valAt(mt, pa), b: valAt(mt, pb) })).filter(r => r.a != null || r.b != null);
+  return `<div class="scroll"><table><tr><th>Métrica</th><th class="num">${monthName(pa)}</th><th class="num">${monthName(pb)}</th><th class="num">Variación</th><th>Evaluación</th></tr>
+    ${rows.map(r => { const e = evalChange(r.mt, r.a, r.b);
+      const head = r.mt.g !== g ? (g = r.mt.g, `<tr class="grp"><td colspan="5">${g}</td></tr>`) : "";
+      return head + `<tr><td>${r.mt.label}</td><td class="num">${r.a == null ? "–" : r.mt.f(r.a)}</td><td class="num">${r.b == null ? "–" : r.mt.f(r.b)}</td>
+        <td class="num">${e.dtxt || "–"}</td><td><span class="ev ${e.cls}">${e.txt}</span></td></tr>`; }).join("")}</table></div>`;
+}
+function historyTable(ps) {
+  let g = "";
+  const rows = METRICS.filter(mt => ps.some(p => valAt(mt, p) != null));
+  return `<div class="scroll"><table><tr><th>Métrica</th>${ps.map(p => `<th class="num" style="text-transform:capitalize">${monthName(p, true)}</th>`).join("")}</tr>
+    ${rows.map(mt => {
+      const head = mt.g !== g ? (g = mt.g, `<tr class="grp"><td colspan="${ps.length + 1}">${g}</td></tr>`) : "";
+      let prev = null;
+      const cells = ps.map(p => { const v = valAt(mt, p); const e = evalChange(mt, prev, v); if (v != null) prev = v;
+        const arrow = e.d == null || e.txt === "Estable" ? "" : ` <span class="ev ${e.cls}">${e.d > 0 ? "▲" : "▼"}</span>`;
+        return `<td class="num">${v == null ? "–" : mt.f(v)}${arrow}</td>`; }).join("");
+      return head + `<tr><td>${mt.label}</td>${cells}</tr>`; }).join("")}</table></div>`;
+}
+function analyzeEvolution(pa, pb, ps) {
+  const out = { summary: "", items: [], recs: [] };
+  const add = (tone, text) => out.items.push({ tone, text });
+  const rec = t => { if (t && !out.recs.includes(t)) out.recs.push(t); };
+  const res = METRICS.filter(mt => mt.better).map(mt => ({ mt, a: valAt(mt, pa), b: valAt(mt, pb) }))
+    .map(r => ({ ...r, e: evalChange(r.mt, r.a, r.b) })).filter(r => r.e.d != null);
+  const up = res.filter(r => r.e.txt === "Mejoró"), dn = res.filter(r => r.e.txt === "Empeoró"), st = res.filter(r => r.e.txt === "Estable");
+  const A = monthName(pa), B = monthName(pb);
+  if (!res.length) { out.summary = `No hay indicadores comparables entre ${A} y ${B}.`; return out; }
+  out.summary = `Entre ${A} y ${B} mejoraron ${up.length} indicadores, empeoraron ${dn.length} y ${st.length} se mantuvieron estables. ` +
+    (up.length > dn.length ? "El balance del mes es positivo." : dn.length > up.length ? "El balance del mes es negativo." : "El balance del mes es mixto.");
+  const mag = r => Math.abs(r.e.d);
+  up.sort((x, y) => mag(y) - mag(x)).slice(0, 3).forEach(r => add("good", `${r.mt.label}: ${r.mt.f(r.a)} → ${r.mt.f(r.b)} (${r.e.dtxt}).`));
+  dn.sort((x, y) => mag(y) - mag(x)).slice(0, 3).forEach(r => { add("bad", `${r.mt.label}: ${r.mt.f(r.a)} → ${r.mt.f(r.b)} (${r.e.dtxt}).`); rec(r.mt.rec); });
+  // Notas de contexto
+  [pa, pb].forEach(p => { const m = at(S.meta, p); const c = m && coverage(m);
+    if (!m) add("info", `${monthName(p)} no tiene informe de Meta; las métricas de pauta no se comparan.`);
+    else if (c && c.days < c.dim) add("info", `El informe de Meta de ${monthName(p)} cubre ${c.days} de ${c.dim} días; los totales pueden quedar por debajo de un mes completo.`);
+    if (!at(S.kommo, p)) add("info", `${monthName(p)} no tiene informe de Kommo.`); });
+  // Tendencias sostenidas (últimos 3 meses con dato)
+  METRICS.filter(mt => mt.trend && mt.better).forEach(mt => {
+    const seq = ps.filter(p => p <= pb).map(p => ({ p, v: valAt(mt, p) })).filter(x => x.v != null);
+    if (seq.length < 3) return;
+    const [x, y, z] = seq.slice(-3), dir = mt.better === "up" ? 1 : -1;
+    if ((y.v - x.v) * dir < 0 && (z.v - y.v) * dir < 0) { add("bad", `${mt.label} empeora por segundo mes seguido (${mt.f(x.v)} → ${mt.f(y.v)} → ${mt.f(z.v)}).`); rec(mt.rec); }
+    else if ((y.v - x.v) * dir > 0 && (z.v - y.v) * dir > 0) add("good", `${mt.label} mejora por segundo mes seguido (${mt.f(x.v)} → ${mt.f(y.v)} → ${mt.f(z.v)}).`);
+    const best = seq.reduce((b, s) => ((s.v - b.v) * dir > 0 ? s : b));
+    if (best.p === pb) add("good", `${B} es el mejor mes registrado en ${mt.label.toLowerCase()} (${mt.f(best.v)}).`);
+  });
+  if (!out.recs.length && up.length >= dn.length) rec("Mantener la estrategia actual y documentar qué cambió este mes para repetirlo.");
+  return out;
+}
+
 /* ============ Data ============ */
 async function loadData() {
   const [m, k] = await Promise.all([
@@ -546,7 +644,7 @@ function renderRail() {
   $("#rail").innerHTML = ps.length ? ps.map(p => `<li><button data-p="${p}" aria-current="${S.view === "dash" && S.selected === p}">
     <span>${monthName(p)}</span><span class="dots"><i class="dot ${at(S.meta, p) ? "m" : ""}" title="Meta"></i><i class="dot ${at(S.kommo, p) ? "k" : ""}" title="Kommo"></i></span></button></li>`).join("")
     : `<li class="muted" style="font-size:13px">Aún no hay meses.</li>`;
-  $("#rail").querySelectorAll("button").forEach(b => b.onclick = () => { S.selected = b.dataset.p; S.view = "dash"; render(); });
+  $("#rail").querySelectorAll("button").forEach(b => b.onclick = () => { S.selected = b.dataset.p; S.compareA = null; S.view = "dash"; render(); });
 }
 function kpi(label, value, curV, prevV, better, fmt) {
   let d = "";
@@ -560,7 +658,7 @@ function kpi(label, value, curV, prevV, better, fmt) {
 function analysisHTML(a) {
   const label = { good: "Fortaleza", warn: "Alerta", bad: "Crítico", info: "Dato" };
   return `<div class="analysis"><p class="summary">${a.summary}</p>
-    <ul>${a.items.map(i => `<li><span class="tag ${i.tone}">${label[i.tone]}</span><span>${i.text}</span></li>`).join("")}</ul>
+    <ul>${a.items.map(i => `<li><span class="tag ${i.tone}">${label[i.tone]}</span><span>${i.text.charAt(0).toUpperCase() + i.text.slice(1)}</span></li>`).join("")}</ul>
     ${a.recs.length ? `<div class="recs"><h4>Recomendaciones</h4><ol>${a.recs.map(r => `<li>${r}</li>`).join("")}</ol></div>` : ""}</div>`;
 }
 function destroyCharts() { S.charts.forEach(c => c.destroy()); S.charts = []; }
@@ -639,9 +737,22 @@ function renderDash() {
 
   // Tendencias
   const all = periods().slice().reverse();
-  if (all.length > 1) h += `<section class="block"><div class="block-title"><h2>Evolución mensual</h2></div><div class="grid2">
-    <div class="panel"><h3>Inversión y conversaciones</h3><div class="chart-box"><canvas id="cTrendMeta"></canvas></div></div>
-    <div class="panel"><h3>Leads y valoraciones</h3><div class="chart-box"><canvas id="cTrendKommo"></canvas></div></div></div></section>`;
+  if (all.length > 1) {
+    const others = all.filter(x => x !== p);
+    if (!S.compareA || !others.includes(S.compareA)) S.compareA = (prevOf([...S.meta, ...S.kommo], p) || { period: others[others.length - 1] }).period;
+    const [pa, pb] = [S.compareA, p].sort();
+    h += `<section class="block cross"><div class="block-title"><h2>Evaluación entre meses</h2>
+        <span class="note">Comparar <select id="cmpA" class="inline-sel">${others.map(o => `<option value="${o}" ${o === S.compareA ? "selected" : ""}>${monthName(o)}</option>`).join("")}</select> con ${monthName(p)}</span></div>
+      <div class="panel"><h3>Análisis de la evolución</h3>${analysisHTML(analyzeEvolution(pa, pb, all))}</div>
+      <div class="panel" style="margin-top:18px"><h3>Comparativo ${monthName(pa)} vs ${monthName(pb)}</h3>${compareTable(pa, pb)}</div>
+      <div class="panel" style="margin-top:18px"><h3>Histórico de todos los meses</h3>${historyTable(all)}</div>
+      <div class="grid2">
+        <div class="panel"><h3>Inversión y conversaciones</h3><div class="chart-box"><canvas id="cTrendMeta"></canvas></div></div>
+        <div class="panel"><h3>Leads y valoraciones</h3><div class="chart-box"><canvas id="cTrendKommo"></canvas></div></div>
+        <div class="panel"><h3>Costos unitarios</h3><div class="chart-box"><canvas id="cTrendCost"></canvas></div></div>
+        <div class="panel"><h3>Tasas de conversión</h3><div class="chart-box"><canvas id="cTrendRate"></canvas></div></div>
+      </div></section>`;
+  }
 
   main.innerHTML = h;
   destroyCharts();
@@ -660,8 +771,18 @@ function renderDash() {
     simple("cTags", k.breakdown?.tags, css("--meta"));
     simple("cInterest", k.breakdown?.interest, css("--accent"));
   }
+  const cmp = $("#cmpA"); if (cmp) cmp.onchange = () => { S.compareA = cmp.value; renderDash(); };
   if (all.length > 1) {
     const labels = all.map(p => monthName(p, true));
+    const series = lbl => all.map(p => valAt(METRICS.find(x => x.label === lbl), p));
+    chart("cTrendCost", { type: "line", data: { labels, datasets: [
+      { label: "Costo por conversación", data: series("Costo por conversación"), borderColor: css("--meta"), backgroundColor: css("--meta"), tension: .3, spanGaps: true },
+      { label: "Costo por lead de Meta", data: series("Costo por lead de Meta"), borderColor: css("--accent"), backgroundColor: css("--accent"), tension: .3, spanGaps: true }] },
+      options: { scales: { y: { beginAtZero: true, ticks: { callback: v => "$" + v } } } } });
+    chart("cTrendRate", { type: "line", data: { labels, datasets: [
+      { label: "CTR (%)", data: series("CTR (todos)"), borderColor: css("--meta"), backgroundColor: css("--meta"), tension: .3, spanGaps: true },
+      { label: "Tasa de agendamiento (%)", data: series("Tasa de agendamiento"), borderColor: css("--kommo"), backgroundColor: css("--kommo"), tension: .3, spanGaps: true }] },
+      options: { scales: { y: { beginAtZero: true, ticks: { callback: v => v + "%" } } } } });
     chart("cTrendMeta", { type: "bar", data: { labels, datasets: [
       { label: "Gasto (USD)", data: all.map(p => at(S.meta, p)?.spend ?? null), backgroundColor: css("--meta"), yAxisID: "y" },
       { label: "Conversaciones", type: "line", data: all.map(p => at(S.meta, p)?.conversations ?? null), borderColor: css("--accent"), backgroundColor: css("--accent"), yAxisID: "y1", tension: .3 }] },
