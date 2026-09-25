@@ -8,11 +8,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="config.js"></script>
+<script src="config.js?v=2"></script>
 <style>
 :root{
   --bg:#F2F1F6; --surface:#FFFFFF; --ink:#221A2A; --muted:#6E6577; --line:#E2DEE8;
@@ -152,8 +152,11 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 <script>
 /* ============ Config ============ */
 const CFG = window.APP_CONFIG || {};
-const configured = CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && !CFG.SUPABASE_URL.includes("TU-PROYECTO");
-const db = configured ? window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY) : null;
+const configured = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && !CFG.SUPABASE_URL.includes("TU-PROYECTO"));
+const configProblem = !window.APP_CONFIG ? "No se cargó config.js: verifica que esté en la raíz del repositorio, junto a index.html."
+  : !configured ? "config.js tiene los valores de ejemplo: reemplázalos por la URL y la anon key de tu proyecto."
+  : !window.supabase ? "No se pudo cargar la librería de Supabase: revisa tu conexión o bloqueadores de contenido." : null;
+const db = !configProblem ? window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY) : null;
 
 const S = { meta: [], kommo: [], selected: null, view: "dash", charts: [],
   up: { platform: "meta", file: null, rows: null, meta: null, k: null } };
@@ -818,8 +821,8 @@ function render() {
 $("#btnUpload").onclick = () => openUpload();
 
 (async function init() {
-  if (!configured) {
-    $("#main").innerHTML = `<div class="empty"><h2>Conecta Supabase</h2><p>Edita <b>config.js</b> con la URL y la anon key de tu proyecto, y ejecuta <b>supabase/schema.sql</b> en el SQL Editor.</p></div>`;
+  if (configProblem) {
+    $("#main").innerHTML = `<div class="empty"><h2>Conecta Supabase</h2><p>${configProblem}</p></div>`;
     return;
   }
   try { await loadData(); render(); }
