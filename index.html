@@ -12,7 +12,13 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="config.js?v=2"></script>
+<script>
+  // Configuración de Supabase (la anon/publishable key es pública por diseño; la seguridad la dan las políticas RLS)
+  window.APP_CONFIG = {
+    SUPABASE_URL: "https://qiqkwvvfvgbxuoffxwql.supabase.co",
+    SUPABASE_ANON_KEY: "sb_publishable_bvaNeX8hWOUCzcXwuGC-FQ_qc5mJH8c"
+  };
+</script>
 <style>
 :root{
   --bg:#F2F1F6; --surface:#FFFFFF; --ink:#221A2A; --muted:#6E6577; --line:#E2DEE8;
@@ -153,8 +159,8 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 /* ============ Config ============ */
 const CFG = window.APP_CONFIG || {};
 const configured = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && !CFG.SUPABASE_URL.includes("TU-PROYECTO"));
-const configProblem = !window.APP_CONFIG ? "No se cargó config.js: verifica que esté en la raíz del repositorio, junto a index.html."
-  : !configured ? "config.js tiene los valores de ejemplo: reemplázalos por la URL y la anon key de tu proyecto."
+const configProblem = !window.APP_CONFIG ? "Falta la configuración de Supabase en index.html."
+  : !configured ? "La configuración tiene valores de ejemplo: reemplázalos por la URL y la anon key de tu proyecto."
   : !window.supabase ? "No se pudo cargar la librería de Supabase: revisa tu conexión o bloqueadores de contenido." : null;
 const db = !configProblem ? window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY) : null;
 
