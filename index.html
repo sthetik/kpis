@@ -91,14 +91,14 @@ section.block{margin-top:36px}
 .panel h3{font-size:16px;margin-bottom:10px}
 .chart-box{position:relative;height:260px}
 
-.analysis .summary{font-size:15.5px;margin:0 0 12px;max-width:72ch}
-.analysis ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-.analysis li{display:grid;grid-template-columns:78px 1fr;gap:10px;align-items:baseline;max-width:80ch}
+.analysis .summary{font-size:15.5px;margin:0 0 12px}
+.analysis > ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.analysis > ul > li{display:grid;grid-template-columns:78px 1fr;gap:10px;align-items:baseline}
 .tag{font-size:11.5px;font-weight:700;border-radius:4px;padding:2px 6px;text-align:center;border:1px solid currentColor}
 .tag.good{color:var(--good)} .tag.warn{color:var(--warn)} .tag.bad{color:var(--bad)} .tag.info{color:var(--info)}
 .recs{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
 .recs h4{margin:0 0 6px;font-size:14px}
-.recs ol{margin:0;padding-left:20px;max-width:78ch}
+.recs ol{margin:0;padding-left:20px}
 .recs li{margin-bottom:4px}
 
 .empty{padding:48px 24px;text-align:center;border:1px dashed var(--line);border-radius:10px;color:var(--muted)}
@@ -139,7 +139,7 @@ tr.grp td{background:var(--bg);font-size:12px;font-weight:700;color:var(--muted)
   .rail button{border-left:0;border-bottom:3px solid transparent;border-radius:6px 6px 0 0;white-space:nowrap}
   .rail button[aria-current="true"]{border-bottom-color:var(--accent)}
   .grid2{grid-template-columns:1fr}
-  .analysis li{grid-template-columns:1fr}
+  .analysis > ul > li{grid-template-columns:1fr}
   .tag{justify-self:start}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
